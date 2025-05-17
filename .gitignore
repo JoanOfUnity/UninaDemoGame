@@ -1,0 +1,16 @@
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.csproj.user
+*.vs/
+*.DS_Store
+*.vscode/
+Thumbs.db
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.Zone.Identifier
