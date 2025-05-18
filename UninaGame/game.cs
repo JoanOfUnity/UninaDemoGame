@@ -156,6 +156,11 @@ namespace UninaGame
 
         int VAO2, VBO2, EBO2, textureVBO2;
         int[] skyboxTextureIDs = new int[6];
+        
+        // Переменные для пола
+        int floorVAO, floorVBO, floorEBO, floorTextureVBO;
+        int floorTextureID;
+        
         List<Vector3> vertices2 = new List<Vector3>
         {
             // Лицевая грань (+Z) скайбокс
@@ -242,6 +247,31 @@ namespace UninaGame
             16, 18, 19,
             20, 21, 22, 
             20, 22, 23
+        };
+
+        // Вершины для пола
+        List<Vector3> floorVertices = new List<Vector3>
+        {
+            new Vector3(-800f, -0.5f,  800f),
+            new Vector3( 800f, -0.5f,  800f),
+            new Vector3( 800f, -0.5f, -800f),
+            new Vector3(-800f, -0.5f, -800f)
+        };
+
+        // Координаты текстуры для пола с тайлингом
+        List<Vector2> floorTexCoords = new List<Vector2>
+        {
+            new Vector2(0.0f, 0.0f),
+            new Vector2(20.0f, 0.0f),
+            new Vector2(20.0f, 20.0f),
+            new Vector2(0.0f, 20.0f)
+        };
+
+        // Индексы для пола
+        uint[] floorIndices = 
+        {
+            0, 1, 2,
+            0, 2, 3
         };
 
         public Game(int width, int height) : base (GameWindowSettings.Default, NativeWindowSettings.Default)
@@ -357,6 +387,49 @@ namespace UninaGame
             GL.BindTexture(TextureTarget.Texture2D, 0);
             GL.Enable(EnableCap.DepthTest);
 
+            // Инициализация пола
+            floorVAO = GL.GenVertexArray();
+            floorVBO = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, floorVBO);
+            GL.BufferData(BufferTarget.ArrayBuffer, floorVertices.Count * Vector3.SizeInBytes, floorVertices.ToArray(), BufferUsageHint.StaticDraw);
+            GL.BindVertexArray(floorVAO);
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 0, 0);
+            GL.EnableVertexArrayAttrib(floorVAO, 0);
+            
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+            
+            floorEBO = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, floorEBO);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, floorIndices.Length * sizeof(uint), floorIndices, BufferUsageHint.StaticDraw);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+            
+            floorTextureVBO = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, floorTextureVBO);
+            GL.BufferData(BufferTarget.ArrayBuffer, floorTexCoords.Count * Vector3.SizeInBytes, floorTexCoords.ToArray(), BufferUsageHint.StaticDraw);
+            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 0, 0);
+            GL.EnableVertexArrayAttrib(floorVAO, 1);
+            
+            GL.BindVertexArray(0);
+              // Загрузка текстуры для пола
+            floorTextureID = GL.GenTexture();
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, floorTextureID);
+              // Настройка параметров текстуры для тайлинга
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+            // Используем анизотропную фильтрацию для улучшения качества при различных углах обзора
+            float maxAnisotropy = 8.0f;  // Обычно поддерживается до 16x, но 8x уже достаточно для заметного улучшения
+            GL.TexParameter(TextureTarget.Texture2D, (TextureParameterName)0x84FE, maxAnisotropy); // GL_TEXTURE_MAX_ANISOTROPY_EXT
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            
+            // Загрузка изображения пола
+            ImageResult floorTexture = ImageResult.FromStream(File.OpenRead("../../../Textures/skybox/fl.jpg"), ColorComponents.RedGreenBlueAlpha);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, floorTexture.Width, floorTexture.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, floorTexture.Data);
+            GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
+            
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+
             camera = new Camera(width, height, new Vector3(-1f, 100f, -180f));
             CursorState = CursorState.Grabbed;
 
@@ -373,6 +446,12 @@ namespace UninaGame
             GL.DeleteBuffer(EBO2);
             for(int i = 0; i < skyboxTextureIDs.Length; i++)
                 GL.DeleteTexture(skyboxTextureIDs[i]);
+            // Очистка ресурсов пола
+            GL.DeleteBuffer(floorVAO);
+            GL.DeleteBuffer(floorVBO);
+            GL.DeleteBuffer(floorEBO);
+            GL.DeleteBuffer(floorTextureVBO);
+            GL.DeleteTexture(floorTextureID);
             shaderProgram.DeleteShader();
             
         }
@@ -410,15 +489,32 @@ namespace UninaGame
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, EBO);
             GL.DrawElements(PrimitiveType.Triangles, indices.Length, DrawElementsType.UnsignedInt, 0);
 
-            //skybox
-            GL.DepthFunc(DepthFunction.Lequal);
+            //skybox            GL.DepthFunc(DepthFunction.Lequal);
 
             Matrix4 model2 = Matrix4.Identity;
             Matrix4 translation2 = Matrix4.CreateTranslation(1.0f, 0f, -3f);
             model2 *= translation2;
             GL.UniformMatrix4(modelLocation, true, ref model2);
-            GL.UniformMatrix4(projectionLocation, true, ref projection);
-
+            GL.UniformMatrix4(projectionLocation, true, ref projection);            
+              // Сначала отрисовываем пол с тайлингом текстуры
+            // Смена режима глубинного теста для пола
+            GL.DepthFunc(DepthFunction.Less);
+            
+            Matrix4 floorModel = Matrix4.Identity;
+            GL.UniformMatrix4(modelLocation, true, ref floorModel);
+            // Используем обычную матрицу вида для пола
+            GL.UniformMatrix4(viewLocation, true, ref view);
+            
+            GL.BindVertexArray(floorVAO);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, floorEBO);
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, floorTextureID);
+            GL.DrawElements(PrimitiveType.Triangles, floorIndices.Length, DrawElementsType.UnsignedInt, 0);
+            
+            // После пола отрисовываем скайбокс
+            GL.DepthFunc(DepthFunction.Lequal);
+            
+            // Отрисовка скайбокса
             GL.BindVertexArray(VAO2);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, EBO2);
             for (int i = 0; i < skyboxTextureIDs.Length; i++) 
@@ -427,6 +523,13 @@ namespace UninaGame
                 GL.BindTexture(TextureTarget.Texture2D, skyboxTextureIDs[i]);
                 GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, i * 6 * sizeof(uint));
             }
+              // Отрисовываем пол еще раз поверх скайбокса для устранения проблем с z-буфером
+            GL.BindVertexArray(floorVAO);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, floorEBO);
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, floorTextureID);
+            GL.DrawElements(PrimitiveType.Triangles, floorIndices.Length, DrawElementsType.UnsignedInt, 0);
+            
             GL.DepthFunc(DepthFunction.Less);
             GL.BindVertexArray(0);
 
