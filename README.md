@@ -2,6 +2,8 @@
 
 A C# OpenTK project for 3D graphics experiments.
 
+![alt text](image.png)
+
 ## Project Structure
 - `Program.cs`: Entry point
 - `game.cs`: Main game logic
