@@ -2,7 +2,7 @@
 
 A C# OpenTK project for 3D graphics experiments.
 
-![alt text](image.png)
+![1747669383069](image/README/1747669383069.png)
 
 ## Project Structure
 - `Program.cs`: Entry point
